@@ -2,13 +2,11 @@ import React from "react";
 import { createRoot } from 'react-dom/client';
 import { Provider, connect } from "react-redux";
 import { combineReducers, configureStore } from '@reduxjs/toolkit';
-import { PersistGate } from 'redux-persist/integration/react';
 import {
   createStateSyncMiddleware,
-  initMessageListener,
+  withReduxStateSync,
+  initStateWithPrevTab,
 } from "redux-state-sync";
-import storage  from "redux-persist/lib/storage";
-import hardset from "redux-persist/lib/stateReconciler/hardSet";
 
 import { FLUSH, PAUSE, PERSIST, persistReducer, persistStore, PURGE, REGISTER, REHYDRATE } from "redux-persist";
 
@@ -16,25 +14,18 @@ interface redState {
   name: string,
   home: { plz: string }
 }
-const Form = ({ name, plz,street, handleChangename,handleChangeplz,handleChangestreet }: any) => {
+const Form = ({ name, plz, street, handleChangename, handleChangeplz, handleChangestreet }: any) => {
   return (
     <>
-          <input value={name} onChange={handleChangename} />
-          <input value={plz} onChange={handleChangeplz} />
-          <input value={street} onChange={handleChangestreet} />
+      <input value={name} onChange={handleChangename} />
+      <input value={plz} onChange={handleChangeplz} />
+      <input value={street} onChange={handleChangestreet} />
     </>
   );
 };
 
 
-const persistConfig = {
-  key: 'root',
-  storage: storage,
-  whitelist:["init2"] ,
-  hardset
-}
-
-const reducer1 = (state: redState|undefined, action: any) => {
+const reducer1 = (state: redState | undefined, action: any) => {
   if (!state) {
     state = { name: '', home: { plz: '' } };
   }
@@ -49,31 +40,33 @@ const reducer1 = (state: redState|undefined, action: any) => {
 };
 const reducer2 = (state: any, action: any) => {
   if (!state) {
-    state = { street: ''  };
+    state = { street: '' };
   }
   switch (action.type) {
     case "CHANGESTREET":
-      return { ...state, street: action.payload  };
+      return { ...state, street: action.payload };
     default:
       return state;
   }
 };
-const combireducer = combineReducers({
+const combireducer = withReduxStateSync(combineReducers({
   init1: reducer1,
   init2: reducer2
-})
-const persistedReducer = persistReducer(persistConfig, combireducer)
+}));
+
+
 const store = configureStore({
-  reducer: persistedReducer,
+  reducer: combireducer,
   devTools: process.env.NODE_ENV !== 'production',
   middleware: (mid) => mid({
     serializableCheck: {
       ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
-    }}).prepend(createStateSyncMiddleware({ blacklist: ["persist/PERSIST"]}))
+    }
+  }).prepend(createStateSyncMiddleware({ whitelist: ["&_RECEIVE_INIT_STATE"] }))
 });
 
-initMessageListener(store);
-const persistor = persistStore(store);
+initStateWithPrevTab(store);
+
 const mapStateToProps = (state: any) => {
   return {
     name: state.init1.name,
@@ -94,9 +87,8 @@ const App = connect(mapStateToProps, mapDispatchToProps)(Form);
 
 createRoot(
   (document.getElementById("root")) as Element
-).render(<Provider store={store}>
-  <PersistGate loading={null} persistor={persistor}>
+).render(
+  <Provider store={store}>
     <App />
-  </PersistGate>
-</Provider>,
+  </Provider>,
 );
